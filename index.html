@@ -1,0 +1,185 @@
+<style>
+  #usernameInput {
+    padding: 10px 15px;
+    font-size: 16px;
+    border: 2px solid #292222;
+    border-radius: 6px;
+    width: 250px;
+    transition: border-color 0.3s;
+    margin-right: 10px;
+  }
+
+  #usernameInput:focus {
+    outline: none;
+    border-color: #4CAF50; /* verde */
+    box-shadow: 0 0 5px #4CAF50AA;
+  }
+
+  #increaseLimitBtn {
+    padding: 10px 20px;
+    font-size: 16px;
+    background-color: #4CAF50; /* verde */
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+  }
+
+  #increaseLimitBtn:disabled {
+    background-color: #8BCF8C;
+    cursor: not-allowed;
+  }
+
+  #increaseLimitBtn:hover:not(:disabled) {
+    background-color: #45a049;
+  }
+</style>
+
+
+
+<input type="text" id="usernameInput" placeholder="Digite o username do agente"> 
+<button id="increaseLimitBtn">Puxar Conversa</button>
+
+<script>
+  const API_BASE = "https://sapios.chat/api/v1";
+  const X_Auth_Token = "OqzMgt-kBw_-Ub1xmr40ytrd-1LW0FXEE4oLMW8TuuG";
+  const X_User_Id = "KM3EgkBEHsXiRAbKt";
+  const STORAGE_KEY = 'originalLimit';
+
+  function saveOriginalLimit(userId, limit) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ userId, limit }));
+  }
+
+  function getOriginalLimit() {
+    const data = localStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : null;
+  }
+
+  function removeOriginalLimit() {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  async function getUserByUsername(username) {
+    const res = await fetch(`${API_BASE}/users.info?username=${encodeURIComponent(username)}`, {
+      headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
+    });
+    if (!res.ok) throw new Error("Erro ao buscar usuário");
+    const data = await res.json();
+    if (!data.user) throw new Error("Usuário não encontrado");
+    return data.user;
+  }
+
+  async function getAgentLivechatInfo(userId) {
+    const res = await fetch(`${API_BASE}/livechat/users/agent/${encodeURIComponent(userId)}`, {
+      headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
+    });
+    if (!res.ok) throw new Error("Erro ao buscar info do agente");
+    const data = await res.json();
+    if (!data.user) throw new Error("Agente não encontrado");
+    return data.user;
+  }
+
+  async function updateAgentLimit(userId, username, newLimit) {
+    const bodyData = {
+      message: JSON.stringify({
+        msg: "method",
+        id: "14",
+        method: "livechat:saveAgentInfo",
+        params: [
+          userId,
+          {
+            name: username,
+            username: username,
+            email: `${username}@sapios.com.br`,
+            maxNumberSimultaneousChat: String(newLimit),
+            voipExtension: ""
+          },
+          []
+        ]
+      })
+    };
+
+    const res = await fetch(`${API_BASE}/method.call/livechat%3AsaveAgentInfo`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Auth-Token": X_Auth_Token,
+        "X-User-Id": X_User_Id
+      },
+      body: JSON.stringify(bodyData)
+    });
+
+    if (!res.ok) throw new Error("Erro ao atualizar limite");
+    return await res.json();
+  }
+
+  const btn = document.getElementById("increaseLimitBtn");
+
+  // Ao carregar a página, tenta restaurar limite se tiver salvo
+  window.addEventListener('load', async () => {
+    const saved = getOriginalLimit();
+    if (saved) {
+      btn.disabled = true;
+      try {
+        // Busca username para atualizar
+        const user = await getUserById(saved.userId);
+        await updateAgentLimit(saved.userId, user.username, saved.limit);
+        console.log(`Limite restaurado para ${saved.limit} do agente ${user.username} após reload`);
+        removeOriginalLimit();
+      } catch (err) {
+        console.error("Erro ao restaurar limite no load:", err);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  });
+
+  async function getUserById(userId) {
+    const res = await fetch(`${API_BASE}/users.info?userId=${encodeURIComponent(userId)}`, {
+      headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
+    });
+    if (!res.ok) throw new Error("Erro ao buscar usuário por ID");
+    const data = await res.json();
+    if (!data.user) throw new Error("Usuário não encontrado por ID");
+    return data.user;
+  }
+
+  btn.addEventListener("click", async () => {
+    const username = document.getElementById("usernameInput").value.trim();
+    if (!username) {
+      alert("Digite o username do agente");
+      return;
+    }
+
+    btn.disabled = true;
+
+    try {
+      const user = await getUserByUsername(username);
+      const livechatUser = await getAgentLivechatInfo(user._id);
+      const currentLimit = livechatUser.livechat?.maxNumberSimultaneousChat || 0;
+      const newLimit = Number(currentLimit) + 1;
+
+      saveOriginalLimit(user._id, currentLimit);
+      await updateAgentLimit(user._id, username, newLimit);
+      alert(`Limite do agente "${username}" aumentado para ${newLimit} conversas simultâneas.`);
+
+      // Depois de 5 segundos, restaura o limite
+      setTimeout(async () => {
+        try {
+          await updateAgentLimit(user._id, username, currentLimit);
+          removeOriginalLimit();
+        } catch (err) {
+          console.error("Erro ao restaurar limite:", err);
+        } finally {
+          btn.disabled = false;
+        }
+      }, 5000);
+
+    } catch (err) {
+      alert("Erro: " + err.message);
+      console.error(err);
+      btn.disabled = false;
+    }
+  });
+</script>
