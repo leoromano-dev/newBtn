@@ -4,21 +4,21 @@
     font-size: 16px;
     border: 2px solid #292222;
     border-radius: 6px;
-    width: 250px;
+    width: 190px;
     transition: border-color 0.3s;
     margin-right: 10px;
   }
 
   #usernameInput:focus {
     outline: none;
-    border-color: #4CAF50; /* verde */
+    border-color: #4CAF50;
     box-shadow: 0 0 5px #4CAF50AA;
   }
 
   #increaseLimitBtn {
     padding: 10px 20px;
     font-size: 16px;
-    background-color: #4CAF50; /* verde */
+    background-color: #4CAF50;
     color: white;
     border: none;
     border-radius: 6px;
@@ -36,9 +36,7 @@
   }
 </style>
 
-
-
-<input type="text" id="usernameInput" placeholder="Digite o username do agente"> 
+<input type="text" id="usernameInput" placeholder="Username do agente" />
 <button id="increaseLimitBtn">Puxar Conversa</button>
 
 <script>
@@ -80,7 +78,23 @@
     return data.user;
   }
 
+  async function getAgentDepartments(userId) {
+    const res = await fetch(`${API_BASE}/livechat/agents/${encodeURIComponent(userId)}/departments`, {
+      headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
+    });
+    if (!res.ok) throw new Error("Erro ao buscar departamentos do agente");
+    const data = await res.json();
+    if (!data.departments) return [];
+    // Extrai só os departmentId
+    return data.departments.map(d => d.departmentId);
+  }
+
   async function updateAgentLimit(userId, username, newLimit) {
+    // Pega dados atuais do agente
+    const agentData = await getAgentLivechatInfo(userId);
+    // Pega departamentos atuais do agente
+    const departmentIds = await getAgentDepartments(userId);
+
     const bodyData = {
       message: JSON.stringify({
         msg: "method",
@@ -89,13 +103,13 @@
         params: [
           userId,
           {
-            name: username,
+            name: agentData.name || username,
             username: username,
-            email: `${username}@sapios.com.br`,
+            email: agentData.email || `${username}@sapios.com.br`,
             maxNumberSimultaneousChat: String(newLimit),
-            voipExtension: ""
+            voipExtension: agentData.voipExtension || ""
           },
-          []
+          departmentIds  // passa o array aqui
         ]
       })
     };
@@ -122,7 +136,6 @@
     if (saved) {
       btn.disabled = true;
       try {
-        // Busca username para atualizar
         const user = await getUserById(saved.userId);
         await updateAgentLimit(saved.userId, user.username, saved.limit);
         console.log(`Limite restaurado para ${saved.limit} do agente ${user.username} após reload`);
@@ -164,7 +177,7 @@
       await updateAgentLimit(user._id, username, newLimit);
       alert(`Limite do agente "${username}" aumentado para ${newLimit} conversas simultâneas.`);
 
-      // Depois de 5 segundos, restaura o limite
+      // Depois de 10 segundos, restaura o limite
       setTimeout(async () => {
         try {
           await updateAgentLimit(user._id, username, currentLimit);
@@ -174,7 +187,7 @@
         } finally {
           btn.disabled = false;
         }
-      }, 5000);
+      }, 10000);
 
     } catch (err) {
       alert("Erro: " + err.message);
