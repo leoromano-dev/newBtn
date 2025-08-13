@@ -2,13 +2,23 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Conversas Hoje</title>
+  <title>Conversas Finalizadas Hoje</title>
   <style>
     .linha-botao {
       display: flex;
       align-items: center;
       gap: 10px;
       margin-bottom: 15px;
+    }
+    #finalizadasInfo {
+      font-size: 16px;
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #f5f5f5;
+      font-family: sans-serif;
+      white-space: nowrap;
+      display: none;
     }
     #verConversasBtn {
       padding: 10px 15px;
@@ -22,15 +32,6 @@
     #verConversasBtn:disabled {
       background-color: #999;
       cursor: not-allowed;
-    }
-    #finalizadasInfo {
-      font-size: 16px;
-      padding: 8px 12px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background-color: #f5f5f5;
-      font-family: sans-serif;
-      white-space: nowrap;
     }
     #increaseLimitBtn {
       padding: 10px 15px;
@@ -49,13 +50,13 @@
 </head>
 <body>
 
-  <!-- Novo botão + contador na direita -->
+  <!-- NOVO BOTÃO -->
   <div class="linha-botao">
-    <button id="verConversasBtn" disabled>Ver Quantidade de Conversas de Hoje</button>
-    <div id="finalizadasInfo" style="display:none;"></div>
+    <button id="verConversasBtn" disabled>Ver Conversas de Hoje</button>
+    <div id="finalizadasInfo"></div>
   </div>
 
-  <!-- Botão original -->
+  <!-- BOTÃO ORIGINAL -->
   <button id="increaseLimitBtn" disabled>Aumentar Limite</button>
 
   <script>
@@ -121,16 +122,18 @@
 
     let agentName = null;
 
-    // Pede o nome do agente
+    // Pedir o dado para a página mãe
     window.parent.postMessage({ action: "getAgentName" }, "*");
 
+    // Escutar a resposta
     window.addEventListener("message", async (event) => {
       if (event.data.action === "returnAgentName") {
         agentName = event.data.agentName;
         try {
           const user = await getUserByUsername(agentName);
-          btnVerConversas.disabled = false;
 
+          // Habilita o novo botão
+          btnVerConversas.disabled = false;
           btnVerConversas.addEventListener("click", async () => {
             infoDiv.style.display = "block";
             infoDiv.textContent = "Carregando...";
@@ -138,6 +141,10 @@
             infoDiv.textContent =
               `Finalizadas: ${closed} | Em aberto: ${open} | Total: ${total}`;
           });
+
+          // Aqui ficaria sua função original para o botão Aumentar Limite
+          document.getElementById("increaseLimitBtn").disabled = false;
+          // ... seu código original para o botão verde continua ...
 
         } catch (err) {
           infoDiv.style.display = "block";
