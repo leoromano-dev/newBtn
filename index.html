@@ -1,47 +1,3 @@
-<html>
-<head>
-<style>
-  #usernameInput {
-    padding: 10px 15px;
-    font-size: 16px;
-    border: 2px solid #292222;
-    border-radius: 6px;
-    width: 190px;
-    transition: border-color 0.3s;
-    margin-right: 10px;
-  }
-  #usernameInput:focus {
-    outline: none;
-    border-color: #4CAF50;
-    box-shadow: 0 0 5px #4CAF50AA;
-  }
-  #increaseLimitBtn {
-    padding: 10px 20px;
-    font-size: 16px;
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-  }
-  #increaseLimitBtn:disabled {
-    background-color: #8BCF8C;
-    cursor: not-allowed;
-  }
-  #increaseLimitBtn:hover:not(:disabled) {
-    background-color: #45a049;
-  }
-</style>
-</head>
-<body>
-
-<div id="finalizadasInfo" style="margin-bottom:10px; font-weight:bold;">
-  Carregando conversas finalizadas de hoje...
-</div>
-
-<button id="increaseLimitBtn" disabled="">Puxar Conversa</button>
-
 <script>
   const API_BASE = "https://sapios.chat/api/v1";
   const X_Auth_Token = "OqzMgt-kBw_-Ub1xmr40ytrd-1LW0FXEE4oLMW8TuuG";
@@ -67,31 +23,29 @@
     return data.user;
   }
 
-  async function getClosedChatsToday(agentId) {
+  function isToday(dateString) {
+    const date = new Date(dateString);
+    const now = new Date();
+    return (
+      date.getDate() === now.getDate() &&
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear()
+    );
+  }
+
+  async function getClosedChatsCountToday(agentId) {
     let total = 0;
     let offset = 0;
     const count = 100;
-
-    // Criar datas de início e fim do dia atual (em UTC)
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
 
     while (true) {
       const url = `${API_BASE}/livechat/rooms?agents[]=${agentId}&open=false&count=${count}&offset=${offset}`;
       const data = await fetchWithAuth(url);
       const rooms = data.rooms || [];
 
-      // Filtrar apenas conversas fechadas hoje
-      rooms.forEach(room => {
-        if (room.closedAt) {
-          const closedDate = new Date(room.closedAt);
-          if (closedDate >= startOfDay && closedDate <= endOfDay) {
-            total++;
-          }
-        }
-      });
+      // Filtra só as de hoje
+      const closedToday = rooms.filter(room => room.closedAt && isToday(room.closedAt));
+      total += closedToday.length;
 
       if (rooms.length < count) break;
       offset += count;
@@ -109,8 +63,8 @@
       agentName = event.data.agentName;
       try {
         const user = await getUserByUsername(agentName);
-        const closedToday = await getClosedChatsToday(user._id);
-        infoDiv.textContent = `Conversas finalizadas hoje por ${agentName}: ${closedToday}`;
+        const closedCountToday = await getClosedChatsCountToday(user._id);
+        infoDiv.textContent = `Conversas finalizadas hoje por ${agentName}: ${closedCountToday}`;
       } catch (err) {
         infoDiv.textContent = `Erro ao buscar finalizadas: ${err.message}`;
       }
@@ -118,6 +72,3 @@
     }
   });
 </script>
-
-</body>
-</html>
