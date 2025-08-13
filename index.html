@@ -1,3 +1,5 @@
+<html>
+<head>
 <style>
   #usernameInput {
     padding: 10px 15px;
@@ -8,13 +10,11 @@
     transition: border-color 0.3s;
     margin-right: 10px;
   }
-
   #usernameInput:focus {
     outline: none;
     border-color: #4CAF50;
     box-shadow: 0 0 5px #4CAF50AA;
   }
-
   #increaseLimitBtn {
     padding: 10px 20px;
     font-size: 16px;
@@ -25,174 +25,83 @@
     cursor: pointer;
     transition: background-color 0.3s;
   }
-
   #increaseLimitBtn:disabled {
     background-color: #8BCF8C;
     cursor: not-allowed;
   }
-
   #increaseLimitBtn:hover:not(:disabled) {
     background-color: #45a049;
   }
 </style>
+</head>
+<body>
 
-<input type="text" id="usernameInput" placeholder="Username do agente" />
-<button id="increaseLimitBtn">Puxar Conversa</button>
+<div id="finalizadasInfo" style="margin-bottom:10px; font-weight:bold;">
+  Carregando conversas finalizadas...
+</div>
+
+<button id="increaseLimitBtn" disabled="">Puxar Conversa</button>
 
 <script>
   const API_BASE = "https://sapios.chat/api/v1";
   const X_Auth_Token = "OqzMgt-kBw_-Ub1xmr40ytrd-1LW0FXEE4oLMW8TuuG";
   const X_User_Id = "KM3EgkBEHsXiRAbKt";
-  const STORAGE_KEY = 'originalLimit';
 
-  function saveOriginalLimit(userId, limit) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ userId, limit }));
-  }
+  const btn = document.getElementById("increaseLimitBtn");
+  const infoDiv = document.getElementById("finalizadasInfo");
 
-  function getOriginalLimit() {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : null;
-  }
-
-  function removeOriginalLimit() {
-    localStorage.removeItem(STORAGE_KEY);
+  async function fetchWithAuth(url, options = {}) {
+    options.headers = {
+      ...options.headers,
+      "X-Auth-Token": X_Auth_Token,
+      "X-User-Id": X_User_Id,
+    };
+    const res = await fetch(url, options);
+    if (!res.ok) throw new Error(`Erro na requisição: ${res.status}`);
+    return res.json();
   }
 
   async function getUserByUsername(username) {
-    const res = await fetch(`${API_BASE}/users.info?username=${encodeURIComponent(username)}`, {
-      headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
-    });
-    if (!res.ok) throw new Error("Erro ao buscar usuário");
-    const data = await res.json();
+    const data = await fetchWithAuth(`${API_BASE}/users.info?username=${encodeURIComponent(username)}`);
     if (!data.user) throw new Error("Usuário não encontrado");
     return data.user;
   }
 
-  async function getAgentLivechatInfo(userId) {
-    const res = await fetch(`${API_BASE}/livechat/users/agent/${encodeURIComponent(userId)}`, {
-      headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
-    });
-    if (!res.ok) throw new Error("Erro ao buscar info do agente");
-    const data = await res.json();
-    if (!data.user) throw new Error("Agente não encontrado");
-    return data.user;
+  async function getClosedChatsCount(agentId) {
+    let total = 0;
+    let offset = 0;
+    const count = 100;
+
+    while (true) {
+      const url = `${API_BASE}/livechat/rooms?agents[]=${agentId}&open=false&count=${count}&offset=${offset}`;
+      const data = await fetchWithAuth(url);
+      const rooms = data.rooms || [];
+      total += rooms.length;
+      if (rooms.length < count) break;
+      offset += count;
+    }
+    return total;
   }
 
-  async function getAgentDepartments(userId) {
-    const res = await fetch(`${API_BASE}/livechat/agents/${encodeURIComponent(userId)}/departments`, {
-      headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
-    });
-    if (!res.ok) throw new Error("Erro ao buscar departamentos do agente");
-    const data = await res.json();
-    if (!data.departments) return [];
-    // Extrai só os departmentId
-    return data.departments.map(d => d.departmentId);
-  }
+  // Pedir o dado para a página mãe
+  let agentName = null;
+  window.parent.postMessage({ action: "getAgentName" }, "*");
 
-  async function updateAgentLimit(userId, username, newLimit) {
-    // Pega dados atuais do agente
-    const agentData = await getAgentLivechatInfo(userId);
-    // Pega departamentos atuais do agente
-    const departmentIds = await getAgentDepartments(userId);
-
-    const bodyData = {
-      message: JSON.stringify({
-        msg: "method",
-        id: "14",
-        method: "livechat:saveAgentInfo",
-        params: [
-          userId,
-          {
-            name: agentData.name || username,
-            username: username,
-            email: agentData.email || `${username}@sapios.com.br`,
-            maxNumberSimultaneousChat: String(newLimit),
-            voipExtension: agentData.voipExtension || ""
-          },
-          departmentIds  // passa o array aqui
-        ]
-      })
-    };
-
-    const res = await fetch(`${API_BASE}/method.call/livechat%3AsaveAgentInfo`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Auth-Token": X_Auth_Token,
-        "X-User-Id": X_User_Id
-      },
-      body: JSON.stringify(bodyData)
-    });
-
-    if (!res.ok) throw new Error("Erro ao atualizar limite");
-    return await res.json();
-  }
-
-  const btn = document.getElementById("increaseLimitBtn");
-
-  // Ao carregar a página, tenta restaurar limite se tiver salvo
-  window.addEventListener('load', async () => {
-    const saved = getOriginalLimit();
-    if (saved) {
-      btn.disabled = true;
+  // Escutar a resposta
+  window.addEventListener("message", async (event) => {
+    if (event.data.action === "returnAgentName") {
+      agentName = event.data.agentName;
       try {
-        const user = await getUserById(saved.userId);
-        await updateAgentLimit(saved.userId, user.username, saved.limit);
-        console.log(`Limite restaurado para ${saved.limit} do agente ${user.username} após reload`);
-        removeOriginalLimit();
+        const user = await getUserByUsername(agentName);
+        const closedCount = await getClosedChatsCount(user._id);
+        infoDiv.textContent = `Conversas finalizadas por ${agentName}: ${closedCount}`;
       } catch (err) {
-        console.error("Erro ao restaurar limite no load:", err);
-      } finally {
-        btn.disabled = false;
+        infoDiv.textContent = `Erro ao buscar finalizadas: ${err.message}`;
       }
-    }
-  });
-
-  async function getUserById(userId) {
-    const res = await fetch(`${API_BASE}/users.info?userId=${encodeURIComponent(userId)}`, {
-      headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
-    });
-    if (!res.ok) throw new Error("Erro ao buscar usuário por ID");
-    const data = await res.json();
-    if (!data.user) throw new Error("Usuário não encontrado por ID");
-    return data.user;
-  }
-
-  btn.addEventListener("click", async () => {
-    const username = document.getElementById("usernameInput").value.trim();
-    if (!username) {
-      alert("Digite o username do agente");
-      return;
-    }
-
-    btn.disabled = true;
-
-    try {
-      const user = await getUserByUsername(username);
-      const livechatUser = await getAgentLivechatInfo(user._id);
-      const currentLimit = livechatUser.livechat?.maxNumberSimultaneousChat || 0;
-      const newLimit = Number(currentLimit) + 1;
-
-      saveOriginalLimit(user._id, currentLimit);
-      await updateAgentLimit(user._id, username, newLimit);
-      alert(`Limite do agente "${username}" aumentado para ${newLimit} conversas simultâneas.`);
-
-      // Depois de 10 segundos, restaura o limite
-      setTimeout(async () => {
-        try {
-          await updateAgentLimit(user._id, username, currentLimit);
-          removeOriginalLimit();
-        } catch (err) {
-          console.error("Erro ao restaurar limite:", err);
-        } finally {
-          btn.disabled = false;
-        }
-      }, 10000);
-
-    } catch (err) {
-      alert("Erro: " + err.message);
-      console.error(err);
       btn.disabled = false;
     }
   });
 </script>
+
+</body>
+</html>
