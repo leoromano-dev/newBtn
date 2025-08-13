@@ -37,7 +37,7 @@
 <body>
 
 <div id="finalizadasInfo" style="margin-bottom:10px; font-weight:bold;">
-  Carregando conversas finalizadas...
+  Carregando conversas finalizadas de hoje...
 </div>
 
 <button id="increaseLimitBtn" disabled="">Puxar Conversa</button>
@@ -67,16 +67,32 @@
     return data.user;
   }
 
-  async function getClosedChatsCount(agentId) {
+  async function getClosedChatsToday(agentId) {
     let total = 0;
     let offset = 0;
     const count = 100;
+
+    // Criar datas de início e fim do dia atual (em UTC)
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
 
     while (true) {
       const url = `${API_BASE}/livechat/rooms?agents[]=${agentId}&open=false&count=${count}&offset=${offset}`;
       const data = await fetchWithAuth(url);
       const rooms = data.rooms || [];
-      total += rooms.length;
+
+      // Filtrar apenas conversas fechadas hoje
+      rooms.forEach(room => {
+        if (room.closedAt) {
+          const closedDate = new Date(room.closedAt);
+          if (closedDate >= startOfDay && closedDate <= endOfDay) {
+            total++;
+          }
+        }
+      });
+
       if (rooms.length < count) break;
       offset += count;
     }
@@ -93,8 +109,8 @@
       agentName = event.data.agentName;
       try {
         const user = await getUserByUsername(agentName);
-        const closedCount = await getClosedChatsCount(user._id);
-        infoDiv.textContent = `Conversas finalizadas por ${agentName}: ${closedCount}`;
+        const closedToday = await getClosedChatsToday(user._id);
+        infoDiv.textContent = `Conversas finalizadas hoje por ${agentName}: ${closedToday}`;
       } catch (err) {
         infoDiv.textContent = `Erro ao buscar finalizadas: ${err.message}`;
       }
