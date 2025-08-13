@@ -2,18 +2,36 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Conversas Finalizadas Hoje</title>
+  <title>Conversas Hoje</title>
   <style>
+    .linha-botao {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    #verConversasBtn {
+      padding: 10px 15px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      background-color: #2196F3;
+      color: white;
+      cursor: pointer;
+    }
+    #verConversasBtn:disabled {
+      background-color: #999;
+      cursor: not-allowed;
+    }
     #finalizadasInfo {
       font-size: 16px;
-      margin-bottom: 10px;
-      padding: 8px;
+      padding: 8px 12px;
       border: 1px solid #ccc;
       border-radius: 5px;
       background-color: #f5f5f5;
       font-family: sans-serif;
+      white-space: nowrap;
     }
-  
     #increaseLimitBtn {
       padding: 10px 15px;
       font-size: 16px;
@@ -30,7 +48,14 @@
   </style>
 </head>
 <body>
-  <div id="finalizadasInfo">Carregando...</div>
+
+  <!-- Novo botão + contador na direita -->
+  <div class="linha-botao">
+    <button id="verConversasBtn" disabled>Ver Quantidade de Conversas de Hoje</button>
+    <div id="finalizadasInfo" style="display:none;"></div>
+  </div>
+
+  <!-- Botão original -->
   <button id="increaseLimitBtn" disabled>Aumentar Limite</button>
 
   <script>
@@ -38,7 +63,7 @@
     const X_Auth_Token = "OqzMgt-kBw_-Ub1xmr40ytrd-1LW0FXEE4oLMW8TuuG";
     const X_User_Id = "KM3EgkBEHsXiRAbKt";
 
-    const btn = document.getElementById("increaseLimitBtn");
+    const btnVerConversas = document.getElementById("verConversasBtn");
     const infoDiv = document.getElementById("finalizadasInfo");
 
     async function fetchWithAuth(url, options = {}) {
@@ -68,45 +93,58 @@
       );
     }
 
-    async function getClosedChatsCountToday(agentId) {
-      let total = 0;
+    async function getChatsToday(agentId) {
+      let closed = 0;
+      let open = 0;
       let offset = 0;
       const count = 100;
 
       while (true) {
-        const url = `${API_BASE}/livechat/rooms?agents[]=${agentId}&open=false&count=${count}&offset=${offset}`;
+        const url = `${API_BASE}/livechat/rooms?agents[]=${agentId}&count=${count}&offset=${offset}`;
         const data = await fetchWithAuth(url);
         const rooms = data.rooms || [];
 
-        // Filtra só as de hoje
-        const closedToday = rooms.filter(room => room.closedAt && isToday(room.closedAt));
-        total += closedToday.length;
+        rooms.forEach(room => {
+          const dateToCheck = room.closedAt || room.ts;
+          if (isToday(dateToCheck)) {
+            if (room.open) open++;
+            else closed++;
+          }
+        });
 
         if (rooms.length < count) break;
         offset += count;
       }
-      return total;
+
+      return { closed, open, total: closed + open };
     }
 
-    // Pedir o dado para a página mãe
     let agentName = null;
+
+    // Pede o nome do agente
     window.parent.postMessage({ action: "getAgentName" }, "*");
 
-    // Escutar a resposta
     window.addEventListener("message", async (event) => {
       if (event.data.action === "returnAgentName") {
         agentName = event.data.agentName;
         try {
           const user = await getUserByUsername(agentName);
-          const closedCountToday = await getClosedChatsCountToday(user._id);
-          infoDiv.textContent = `Conversas finalizadas hoje por ${agentName}: ${closedCountToday}`;
+          btnVerConversas.disabled = false;
+
+          btnVerConversas.addEventListener("click", async () => {
+            infoDiv.style.display = "block";
+            infoDiv.textContent = "Carregando...";
+            const { closed, open, total } = await getChatsToday(user._id);
+            infoDiv.textContent =
+              `Finalizadas: ${closed} | Em aberto: ${open} | Total: ${total}`;
+          });
+
         } catch (err) {
-          infoDiv.textContent = `Erro ao buscar finalizadas: ${err.message}`;
+          infoDiv.style.display = "block";
+          infoDiv.textContent = `Erro: ${err.message}`;
         }
-        btn.disabled = false;
       }
     });
   </script>
 </body>
 </html>
-
