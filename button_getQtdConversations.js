@@ -33,26 +33,34 @@ async function getUserByUsername(username) {
   return data.user;
 }
 
-// retorna o parâmetro createdAt para filtros de data
-function getCreatedAtParam(targetDate) {
-  const start = new Date(targetDate);
-  start.setUTCHours(3, 0, 0, 0);
-  const end = new Date(targetDate);
-  end.setUTCDate(end.getUTCDate() + 1);
-  end.setUTCHours(2, 59, 59, 0);
-  return encodeURIComponent(JSON.stringify({ start: start.toISOString(), end: end.toISOString() }));
-}
-
-// busca chats do agente por data
+// busca chats do agente por data (separando finalizadas e abertas)
 async function getChatsByDate(agentId, targetDate) {
   let closed = 0, open = 0, offset = 0;
-  const createdAtParam = getCreatedAtParam(targetDate);
 
+  // intervalo de data (início e fim do dia)
+  const start = new Date(targetDate);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(targetDate);
+  end.setUTCHours(23, 59, 59, 999);
+
+  // ---- Finalizadas (usar closedAt) ----
+  offset = 0;
   while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&createdAt=${createdAtParam}&sort={"ts":-1}`;
+    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&closedAt=${encodeURIComponent(JSON.stringify({ start: start.toISOString(), end: end.toISOString() }))}&sort={"closedAt":-1}`;
     const data = await fetchWithAuth(url);
     const rooms = data.rooms || [];
-    for (const room of rooms) room.open ? open++ : closed++;
+    closed += rooms.length;
+    if (rooms.length === 0) break;
+    offset += rooms.length;
+  }
+
+  // ---- Em aberto (open=true) ----
+  offset = 0;
+  while (true) {
+    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&open=true&sort={"ts":-1}`;
+    const data = await fetchWithAuth(url);
+    const rooms = data.rooms || [];
+    open += rooms.length;
     if (rooms.length === 0) break;
     offset += rooms.length;
   }
