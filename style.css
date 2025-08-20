@@ -1,0 +1,42 @@
+.linha-botao {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    #finalizadasInfo, #limitBanner {
+      font-size: 16px;
+      padding: 8px 12px;
+      border-radius: 5px;
+      font-family: sans-serif;
+      white-space: nowrap;
+      display: none;
+    }
+    #finalizadasInfo {
+      border: 1px solid #ccc;
+      background-color: #f5f5f5;
+    }
+    #limitBanner.success { background-color: #5ec761; color: white; }
+    #limitBanner.error { background-color: #e75a50; color: white; }
+
+    #verConversasBtn, #increaseLimitBtn {
+      padding: 10px 15px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      color: white;
+    }
+    #verConversasBtn { background-color: #2196F3; }
+    #verConversasBtn:hover { background-color: #1868aa; }
+    #increaseLimitBtn { background-color: #4CAF50; }
+    #increaseLimitBtn:hover { background-color: #3e9141; }
+    #verConversasBtn:disabled, #increaseLimitBtn:disabled { background-color: #999; cursor: not-allowed; }
+
+    input[type="date"] {
+      padding: 8px 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
