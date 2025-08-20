@@ -2,216 +2,25 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Conversas Finalizadas Hoje</title>
-  <style>
-    .linha-botao {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 15px;
-    }
-    #finalizadasInfo, #limitBanner {
-      font-size: 16px;
-      padding: 8px 12px;
-      border-radius: 5px;
-      font-family: sans-serif;
-      white-space: nowrap;
-      display: none;
-    }
-    #finalizadasInfo {
-      border: 1px solid #ccc;
-      background-color: #f5f5f5;
-    }
-    #limitBanner.success { background-color: #4CAF50; color: white; }
-    #limitBanner.error { background-color: #f44336; color: white; }
-
-    #verConversasBtn, #increaseLimitBtn {
-      padding: 10px 15px;
-      font-size: 16px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      color: white;
-    }
-    #verConversasBtn { background-color: #2196F3; }
-    #verConversasBtn:hover { background-color: #1868aa; }
-    #increaseLimitBtn { background-color: #4CAF50; }
-    #increaseLimitBtn:hover { background-color: #3e9141; }
-    #verConversasBtn:disabled, #increaseLimitBtn:disabled { background-color: #999; cursor: not-allowed; }
-  </style>
+  <title>Conversas Finalizadas</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Linha do botão Ver Conversas -->
+  <!-- Linha do botão Ver Conversas com calendário -->
   <div class="linha-botao">
-    <button id="verConversasBtn" disabled>Ver Conversas de Hoje</button>
+    <button id="verConversasBtn" title="Clique para ver as conversas finalizadas, em aberto e o total que você atendeu" disabled>Ver Quantidade de Conversas</button>
+    <input type="date" id="inputData">
     <div id="finalizadasInfo"></div>
   </div>
 
   <!-- Linha do botão Aumentar Limite -->
   <div class="linha-botao">
-    <button id="increaseLimitBtn" disabled>Aumentar Limite</button>
+    <button id="increaseLimitBtn"  title="A cada clique, uma conversa por vez é direcionada para o seu atendimento" disabled>Pegar Conversa da Fila</button>
     <div id="limitBanner"></div>
   </div>
 
-  <script>
-    const API_BASE = "https://sapios.chat/api/v1";
-    const X_Auth_Token = "OqzMgt-kBw_-Ub1xmr40ytrd-1LW0FXEE4oLMW8TuuG";
-    const X_User_Id = "KM3EgkBEHsXiRAbKt";
-
-    const btnVerConversas = document.getElementById("verConversasBtn");
-    const infoDiv = document.getElementById("finalizadasInfo");
-    const btnIncrease = document.getElementById("increaseLimitBtn");
-    const banner = document.getElementById("limitBanner");
-
-    async function fetchWithAuth(url, options = {}) {
-      options.headers = { ...options.headers, "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id };
-      const res = await fetch(url, options);
-      if (!res.ok) throw new Error(`Erro na requisição: ${res.status}`);
-      return res.json();
-    }
-
-    async function getUserByUsername(username) {
-      const data = await fetchWithAuth(`${API_BASE}/users.info?username=${encodeURIComponent(username)}`);
-      if (!data.user) throw new Error("Usuário não encontrado");
-      return data.user;
-    }
-
-    function isToday(dateString) {
-      const date = new Date(dateString);
-      const now = new Date();
-      return date.getDate() === now.getDate() &&
-             date.getMonth() === now.getMonth() &&
-             date.getFullYear() === now.getFullYear();
-    }
-
-    async function getChatsToday(agentId) {
-      let closed = 0, open = 0, offset = 0, count = 100;
-      while (true) {
-        const url = `${API_BASE}/livechat/rooms?agents[]=${agentId}&count=${count}&offset=${offset}`;
-        const data = await fetchWithAuth(url);
-        const rooms = data.rooms || [];
-        rooms.forEach(room => {
-          const dateToCheck = room.closedAt || room.ts;
-          if (isToday(dateToCheck)) {
-            room.open ? open++ : closed++;
-          }
-        });
-        if (rooms.length < count) break;
-        offset += count;
-      }
-      return { closed, open, total: closed + open };
-    }
-
-    async function getOpenChats(agentId) {
-      const url = `${API_BASE}/livechat/rooms?agents[]=${agentId}&open=true&queued=false&onhold=false&count=100&sort={"ts":-1}`;
-      const data = await fetchWithAuth(url);
-      return data.rooms ? data.rooms.length : 0;
-    }
-
-    async function getAgentLivechatInfo(agentId) {
-      const data = await fetchWithAuth(`${API_BASE}/livechat/users/agent/${encodeURIComponent(agentId)}`);
-      if (!data.user) throw new Error("Agente não encontrado");
-      return data.user;
-    }
-
-    async function getAgentDepartments(userId) {
-      const res = await fetch(`${API_BASE}/livechat/agents/${encodeURIComponent(userId)}/departments`, {
-        headers: { "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id }
-      });
-      if (!res.ok) throw new Error("Erro ao buscar departamentos do agente");
-      const data = await res.json();
-      return data.departments ? data.departments.map(d => d.departmentId) : [];
-    }
-
-    async function updateAgentLimit(agentId, agentData, newLimit) {
-      const departmentIds = await getAgentDepartments(agentId);
-      const bodyData = {
-        message: JSON.stringify({
-          msg: "method",
-          id: "14",
-          method: "livechat:saveAgentInfo",
-          params: [
-            agentId,
-            {
-              name: agentData.livechat.name,
-              username: agentData.livechat.username,
-              email: agentData.livechat.email || `${agentData.livechat.username}@sapios.com.br`,
-              maxNumberSimultaneousChat: String(newLimit),
-              voipExtension: agentData.livechat.voipExtension || "",
-            },
-            departmentIds
-          ],
-        }),
-      };
-      const res = await fetch(`${API_BASE}/method.call/livechat%3AsaveAgentInfo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Auth-Token": X_Auth_Token, "X-User-Id": X_User_Id },
-        body: JSON.stringify(bodyData),
-      });
-      if (!res.ok) throw new Error("Erro ao atualizar limite");
-      return await res.json();
-    }
-
-    function showBanner(message, type="success") {
-      banner.textContent = message;
-      banner.className = type;
-      banner.style.display = "block";
-      setTimeout(() => banner.style.display = "none", 5000);
-    }
-
-    let agentName = null;
-
-    window.parent.postMessage({ action: "getAgentName" }, "*");
-
-    window.addEventListener("message", (event) => {
-      if (event.data.action === "returnAgentName") {
-        agentName = event.data.agentName;
-        btnVerConversas.disabled = false;
-        btnIncrease.disabled = false;
-      }
-    });
-
-    btnVerConversas.addEventListener("click", async () => {
-      infoDiv.style.display = "block";
-      infoDiv.textContent = "Carregando...";
-      try {
-        const user = await getUserByUsername(agentName);
-        const { closed, open, total } = await getChatsToday(user._id);
-        infoDiv.textContent = `Finalizadas: ${closed} | Em aberto: ${open} | Total: ${total}`;
-      } catch (err) {
-        infoDiv.textContent = `Erro: ${err.message}`;
-      }
-    });
-
-    btnIncrease.addEventListener("click", async () => {
-      btnIncrease.disabled = true;
-      try {
-        const user = await getUserByUsername(agentName);
-        const agentData = await getAgentLivechatInfo(user._id);
-        const openChats = await getOpenChats(user._id);
-        const currentLimit = Number(agentData.livechat?.maxNumberSimultaneousChat) || 0;
-
-        if (openChats >= currentLimit) {
-          const newLimit = openChats + 1;
-          await updateAgentLimit(user._id, agentData, newLimit);
-          showBanner(`Limite aumentado para ${newLimit}`, "success");
-
-          setTimeout(async () => {
-            try { await updateAgentLimit(user._id, agentData, currentLimit); }
-            catch(e) { console.error("Erro ao restaurar limite:", e); }
-            finally { btnIncrease.disabled = false; }
-          }, 10000);
-        } else {
-          showBanner(`Limite atual (${currentLimit}) é suficiente para ${openChats} chats.`, "error");
-          btnIncrease.disabled = false;
-        }
-      } catch(err) {
-        showBanner(`Erro: ${err.message}`, "error");
-        btnIncrease.disabled = false;
-      }
-    });
-  </script>
+  <script src="button_getQtdConversations.js"></script>
+  <script src="button_increase_limits_conversations.js"></script>
 </body>
 </html>
-
