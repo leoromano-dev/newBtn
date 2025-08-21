@@ -7,20 +7,71 @@
 </head>
 <body>
 
-  <!-- Linha do botão Ver Conversas com calendário -->
   <div class="linha-botao">
-    <button id="verConversasBtn" title="Clique para ver as conversas finalizadas, em aberto e o total que você atendeu" disabled>Ver Quantidade de Conversas</button>
+    <button id="verConversasBtn" title="Clique para ver as conversas finalizadas, em aberto e o total que você atendeu" disabled>
+      Ver Quantidade de Conversas
+    </button>
     <input type="date" id="inputData">
     <div id="finalizadasInfo"></div>
   </div>
 
-  <!-- Linha do botão Aumentar Limite -->
   <div class="linha-botao">
-    <button id="increaseLimitBtn"  title="A cada clique, uma conversa por vez é direcionada para o seu atendimento" disabled>Pegar Conversa da Fila</button>
+    <button id="increaseLimitBtn" title="A cada clique, uma conversa por vez é direcionada para o seu atendimento" disabled>
+      Pegar Conversa da Fila
+    </button>
     <div id="limitBanner"></div>
   </div>
 
-  <script src="button_getQtdConversations.js"></script>
-  <script src="button_increase_limits_conversations.js"></script>
+  <script src="scripts/button_getQtdConversations.js"></script>
+  <script src="scripts/button_increase_limits_conversations.js"></script>
+  <script>
+    // Configuração da sua Counter API
+    const counterApiUrl = 'https://api.counterapi.dev/v1/teste/tes/up';
+    const counterApiUrl1 = 'https://api.counterapi.dev/v1/teste/tes1/up';
+
+    async function registrarClique() {
+      try {
+        const response = await fetch(counterApiUrl, { method: 'GET' });
+
+        if (!response.ok) {
+          throw new Error(`Erro ao registrar o clique: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Clique registrado com sucesso! Contagem atual:', data.value);
+
+      } catch (error) {
+        console.error('Falha ao conectar com a Counter API:', error);
+      }
+    }
+
+        async function registrarClique1() {
+      try {
+        const response = await fetch(counterApiUrl1, { method: 'GET' });
+
+        if (!response.ok) {
+          throw new Error(`Erro ao registrar o clique: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Clique registrado com sucesso! Contagem atual:', data.value);
+
+      } catch (error) {
+        console.error('Falha ao conectar com a Counter API:', error);
+      }
+    }
+
+    
+    const verConversasBtn = document.getElementById('verConversasBtn');
+    if (verConversasBtn) {
+      verConversasBtn.addEventListener('click', registrarClique);
+    }
+    
+    const increaseLimitBtn = document.getElementById('increaseLimitBtn');
+    if (increaseLimitBtn) {
+      increaseLimitBtn.addEventListener('click', registrarClique1);
+    }
+  </script>
+
 </body>
 </html>
