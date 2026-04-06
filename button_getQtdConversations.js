@@ -4,163 +4,82 @@ const infoDiv = document.getElementById("finalizadasInfo");
 const btnIncrease = document.getElementById("increaseLimitBtn");
 const banner = document.getElementById("limitBanner");
 
+// variáveis globais preenchidas pelo Meteor
 let agentData = null;
 
-// Define hoje no input
+// Preenche input com data de hoje
 (function setHoje() {
   const hoje = new Date();
   inputData.value = hoje.toISOString().split("T")[0];
 })();
 
-// Fetch com autenticação
+// função de fetch com autenticação dinâmica
 async function fetchWithAuth(url, options = {}) {
   if (!agentData) throw new Error("Dados do agente não recebidos ainda!");
-
   options.headers = {
     ...options.headers,
     "X-Auth-Token": agentData.token,
     "X-User-Id": agentData.userId
   };
-
   const res = await fetch(url, options);
   if (!res.ok) throw new Error(`Erro na requisição: ${res.status}`);
-
   return res.json();
 }
 
-// Buscar usuário
+// busca usuário pelo username
 async function getUserByUsername(username) {
-  const data = await fetchWithAuth(
-    `${agentData.siteUrl}/users.info?username=${encodeURIComponent(username)}`
-  );
-
+  const data = await fetchWithAuth(`${agentData.siteUrl}/users.info?username=${encodeURIComponent(username)}`);
   if (!data.user) throw new Error("Usuário não encontrado");
   return data.user;
 }
 
-// ✅ Corrigido (UTC-3 sem cortar horário)
-function getLocalDayRange(dateStr) {
-  const [year, month, day] = dateStr.split("-");
-
-  const start = new Date(year, month - 1, day, 0, 0, 0);
-  const end = new Date(year, month - 1, day, 23, 59, 59, 999);
-
-  return {
-    start: start.toISOString(),
-    end: end.toISOString()
-  };
-}
-
-// Buscar chats
+// busca chats do agente por data (separando finalizadas e abertas)
 async function getChatsByDate(agentId, targetDate) {
-  let closed = 0;
-  let open = 0;
+  let closed = 0, open = 0, offset = 0;
 
-  const { start, end } = getLocalDayRange(targetDate);
-  const startTime = new Date(start).getTime();
-  const endTime = new Date(end).getTime();
+  // intervalo de data (início e fim do dia)
+  const start = new Date(targetDate);
+  start.setUTCHours(0, 0, 0, 0);
+  const end = new Date(targetDate);
+  end.setUTCHours(23, 59, 59, 999);
 
-  let offset = 0;
-  const limit = 50;
-
-  while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?offset=${offset}&count=${limit}&sort=${encodeURIComponent(
-      JSON.stringify({ ts: -1 })
-    )}`;
-
-    const data = await fetchWithAuth(url);
-    const rooms = data.rooms || [];
-
-    for (const room of rooms) {
-      // 🔍 pega o agente correto (isso muda dependendo do Rocket)
-      const servedById =
-        room.servedBy?._id ||
-        room.u?._id ||
-        room.lastAgent?._id;
-
-      if (servedById !== agentId) continue;
-
-      // ---- FINALIZADAS ----
-      if (room.closedAt) {
-        const closedTime = new Date(room.closedAt).getTime();
-
-        if (closedTime >= startTime && closedTime <= endTime) {
-          closed++;
-        }
-      }
-
-      // ---- EM ABERTO ----
-      if (room.open === true) {
-        const createdTime = new Date(room.ts).getTime();
-
-        if (createdTime >= startTime && createdTime <= endTime) {
-          open++;
-        }
-      }
-    }
-
-    if (rooms.length < limit) break;
-    offset += limit;
-  }
-
-  return {
-    closed,
-    open,
-    total: closed + open
-  };
-}
-
-  while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&count=${limit}&query=${encodeURIComponent(
-      JSON.stringify(closedQuery)
-    )}&sort=${encodeURIComponent(JSON.stringify({ closedAt: -1 }))}`;
-
-    const data = await fetchWithAuth(url);
-    const rooms = data.rooms || [];
-
-    closed += rooms.length;
-
-    if (rooms.length < limit) break;
-    offset += limit;
-  }
-
-  // ---- EM ABERTO ----
+  // ---- Finalizadas (usar closedAt) ----
   offset = 0;
-
   while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&count=${limit}&open=true&sort=${encodeURIComponent(
-      JSON.stringify({ ts: -1 })
-    )}`;
-
+    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&closedAt=${encodeURIComponent(JSON.stringify({ start: start.toISOString(), end: end.toISOString() }))}&sort={"closedAt":-1}`;
     const data = await fetchWithAuth(url);
     const rooms = data.rooms || [];
-
-    open += rooms.length;
-
-    if (rooms.length < limit) break;
-    offset += limit;
+    closed += rooms.length;
+    if (rooms.length === 0) break;
+    offset += rooms.length;
   }
 
-  return {
-    closed,
-    open,
-    total: closed + open
-  };
+  // ---- Em aberto (open=true) ----
+  offset = 0;
+  while (true) {
+    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&open=true&sort={"ts":-1}`;
+    const data = await fetchWithAuth(url);
+    const rooms = data.rooms || [];
+    open += rooms.length;
+    if (rooms.length === 0) break;
+    offset += rooms.length;
+  }
+
+  return { closed, open, total: closed + open };
 }
 
-// Banner
+// exibe banners de status
 function showBanner(message, type = "success") {
   banner.textContent = message;
   banner.className = type;
   banner.style.display = "block";
-
   setTimeout(() => (banner.style.display = "none"), 5000);
 }
 
-// Solicita dados ao Meteor
+// pede os dados ao Meteor
 window.parent.postMessage({ action: "getAgentName" }, "*");
 
-// Recebe dados
+// recebe os dados do Meteor
 window.addEventListener("message", (event) => {
   if (event.data.action === "returnAgentName") {
     agentData = {
@@ -170,39 +89,27 @@ window.addEventListener("message", (event) => {
       userId: event.data.userId,
       siteUrl: event.data.siteUrl
     };
-
-    console.log("Dados recebidos:", agentData);
-
+    console.log("Dados recebidos do Meteor:", agentData); // depuração
     btnVerConversas.disabled = false;
     btnIncrease.disabled = false;
   }
 });
 
-// Botão
+// botão Ver Conversas
 btnVerConversas.addEventListener("click", async () => {
   if (!agentData || !agentData.agentName) return;
-
-  const selectedDate =
-    inputData.value || new Date().toISOString().split("T")[0];
-
+  const selectedDate = inputData.value || new Date().toISOString().split("T")[0];
   infoDiv.style.display = "block";
   infoDiv.textContent = "Carregando...";
-
   try {
     const user = await getUserByUsername(agentData.agentName);
-
-    const { closed, open, total } = await getChatsByDate(
-      user._id,
-      selectedDate
-    );
+    const { closed, open, total } = await getChatsByDate(user._id, selectedDate);
 
     const [year, month, day] = selectedDate.split("-");
     const dataFormatada = `${day}/${month}/${year}`;
 
-    infoDiv.textContent =
-      `Data: ${dataFormatada} | Finalizadas: ${closed} | Em aberto: ${open} | Total: ${total}`;
+    infoDiv.textContent = `Data: ${dataFormatada} | Finalizadas: ${closed} | Em aberto: ${open} | Total: ${total}`;
   } catch (err) {
-    console.error(err);
     infoDiv.textContent = `Erro: ${err.message}`;
   }
 });
