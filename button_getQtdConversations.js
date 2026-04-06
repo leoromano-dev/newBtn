@@ -62,12 +62,13 @@ async function getChatsByDate(agentId, targetDate) {
   let offset = 0;
   const limit = 50;
 
-  const closedQuery = {
-    closedAt: {
-      $gte: new Date(start),
-      $lte: new Date(end)
-    }
-  };
+const closedQuery = {
+  closedAt: {
+    $gte: start,
+    $lte: end
+  },
+  "servedBy._id": agentId
+};
 
   while (true) {
     const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&count=${limit}&query=${encodeURIComponent(
