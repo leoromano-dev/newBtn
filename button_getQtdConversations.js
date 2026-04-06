@@ -38,13 +38,12 @@ async function getUserByUsername(username) {
   return data.user;
 }
 
-// 🔥 Função corrigida (UTC-3 correto)
+// ✅ Corrigido (UTC-3 sem cortar horário)
 function getLocalDayRange(dateStr) {
-  const start = new Date(dateStr);
-  start.setHours(0, 0, 0, 0);
+  const [year, month, day] = dateStr.split("-");
 
-  const end = new Date(dateStr);
-  end.setHours(23, 59, 59, 999);
+  const start = new Date(year, month - 1, day, 0, 0, 0);
+  const end = new Date(year, month - 1, day, 23, 59, 59, 999);
 
   return {
     start: start.toISOString(),
@@ -63,17 +62,24 @@ async function getChatsByDate(agentId, targetDate) {
   let offset = 0;
   const limit = 50;
 
+  const closedQuery = {
+    closedAt: {
+      $gte: new Date(start),
+      $lte: new Date(end)
+    }
+  };
+
   while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&count=${limit}&closedAt=${encodeURIComponent(
-      JSON.stringify({ start, end })
-    )}&sort={"closedAt":-1}`;
+    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&count=${limit}&query=${encodeURIComponent(
+      JSON.stringify(closedQuery)
+    )}&sort=${encodeURIComponent(JSON.stringify({ closedAt: -1 }))}`;
 
     const data = await fetchWithAuth(url);
     const rooms = data.rooms || [];
 
     closed += rooms.length;
 
-    if (rooms.length < limit) break; // 🔥 evita loop infinito
+    if (rooms.length < limit) break;
     offset += limit;
   }
 
@@ -81,7 +87,9 @@ async function getChatsByDate(agentId, targetDate) {
   offset = 0;
 
   while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&count=${limit}&open=true&sort={"ts":-1}`;
+    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&count=${limit}&open=true&sort=${encodeURIComponent(
+      JSON.stringify({ ts: -1 })
+    )}`;
 
     const data = await fetchWithAuth(url);
     const rooms = data.rooms || [];
@@ -153,6 +161,7 @@ btnVerConversas.addEventListener("click", async () => {
     infoDiv.textContent =
       `Data: ${dataFormatada} | Finalizadas: ${closed} | Em aberto: ${open} | Total: ${total}`;
   } catch (err) {
+    console.error(err);
     infoDiv.textContent = `Erro: ${err.message}`;
   }
 });
