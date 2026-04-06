@@ -57,18 +57,58 @@ async function getChatsByDate(agentId, targetDate) {
   let open = 0;
 
   const { start, end } = getLocalDayRange(targetDate);
+  const startTime = new Date(start).getTime();
+  const endTime = new Date(end).getTime();
 
-  // ---- FINALIZADAS ----
   let offset = 0;
   const limit = 50;
 
-const closedQuery = {
-  closedAt: {
-    $gte: start,
-    $lte: end
-  },
-  "servedBy._id": agentId
-};
+  while (true) {
+    const url = `${agentData.siteUrl}/livechat/rooms?offset=${offset}&count=${limit}&sort=${encodeURIComponent(
+      JSON.stringify({ ts: -1 })
+    )}`;
+
+    const data = await fetchWithAuth(url);
+    const rooms = data.rooms || [];
+
+    for (const room of rooms) {
+      // 🔍 pega o agente correto (isso muda dependendo do Rocket)
+      const servedById =
+        room.servedBy?._id ||
+        room.u?._id ||
+        room.lastAgent?._id;
+
+      if (servedById !== agentId) continue;
+
+      // ---- FINALIZADAS ----
+      if (room.closedAt) {
+        const closedTime = new Date(room.closedAt).getTime();
+
+        if (closedTime >= startTime && closedTime <= endTime) {
+          closed++;
+        }
+      }
+
+      // ---- EM ABERTO ----
+      if (room.open === true) {
+        const createdTime = new Date(room.ts).getTime();
+
+        if (createdTime >= startTime && createdTime <= endTime) {
+          open++;
+        }
+      }
+    }
+
+    if (rooms.length < limit) break;
+    offset += limit;
+  }
+
+  return {
+    closed,
+    open,
+    total: closed + open
+  };
+}
 
   while (true) {
     const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&count=${limit}&query=${encodeURIComponent(
