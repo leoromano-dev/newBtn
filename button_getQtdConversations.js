@@ -38,10 +38,10 @@ async function getChatsByDate(agentId, targetDate) {
   let closed = 0, open = 0, offset = 0;
 
   // intervalo de data (início e fim do dia)
-  const start = new Date(targetDate);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(targetDate);
-  end.setUTCHours(23, 59, 59, 999);
+const [year, month, day] = targetDate.split("-");
+
+const start = new Date(year, month - 1, day, 0, 0, 0);
+const end = new Date(year, month - 1, day, 23, 59, 59, 999);
 
   // ---- Finalizadas (usar closedAt) ----
   offset = 0;
