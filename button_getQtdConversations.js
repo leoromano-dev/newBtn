@@ -40,6 +40,19 @@ async function getChatsByDate(agentId, targetDate) {
   // intervalo de data (início e fim do dia)
 const [year, month, day] = targetDate.split("-");
 
+  const agora = new Date();
+  const hojeStr = agora.toISOString().split("T")[0];
+  
+  // se for hoje E passou das 21h → volta 1 dia
+  if (targetDate === hojeStr && agora.getHours() >= 21) {
+    const dataAjustada = new Date(year, month - 1, day);
+    dataAjustada.setDate(dataAjustada.getDate() - 1);
+  
+    year = dataAjustada.getFullYear();
+    month = dataAjustada.getMonth() + 1;
+    day = dataAjustada.getDate();
+}
+
 const start = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
 const end = new Date(Date.UTC(year, month - 1, day + 1, 2, 59, 59, 999));
 
