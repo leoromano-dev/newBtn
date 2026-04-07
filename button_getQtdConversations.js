@@ -28,52 +28,56 @@ async function fetchWithAuth(url, options = {}) {
 
 // busca usuário pelo username
 async function getUserByUsername(username) {
-  const data = await fetchWithAuth(`${agentData.siteUrl}/users.info?username=${encodeURIComponent(username)}`);
+  const data = await fetchWithAuth(
+    `${agentData.siteUrl}/users.info?username=${encodeURIComponent(username)}`
+  );
   if (!data.user) throw new Error("Usuário não encontrado");
   return data.user;
 }
 
-// busca chats do agente por data (separando finalizadas e abertas)
+// busca chats do agente por data (FINAL)
 async function getChatsByDate(agentId, targetDate) {
   let closed = 0, open = 0, offset = 0;
 
-  // intervalo de data (início e fim do dia)
-const [year, month, day] = targetDate.split("-");
+  // 🔥 DATA CORRETA (UTC baseado no Brasil)
+  let [year, month, day] = targetDate.split("-").map(Number);
 
-  const agora = new Date();
-  const hojeStr = agora.toISOString().split("T")[0];
-  
-  // se for hoje E passou das 21h → volta 1 dia
-  if (targetDate === hojeStr && agora.getHours() >= 21) {
-    const dataAjustada = new Date(year, month - 1, day);
-    dataAjustada.setDate(dataAjustada.getDate() - 1);
-  
-    year = dataAjustada.getFullYear();
-    month = dataAjustada.getMonth() + 1;
-    day = dataAjustada.getDate();
-}
+  const start = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
+  const end = new Date(Date.UTC(year, month - 1, day + 1, 2, 59, 59, 999));
 
-const start = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
-const end = new Date(Date.UTC(year, month - 1, day, 2, 59, 59, 999));
-
-  // ---- Finalizadas (usar closedAt) ----
+  // ---- Finalizadas (closedAt dentro do range) ----
   offset = 0;
   while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&closedAt=${encodeURIComponent(JSON.stringify({ start: start.toISOString(), end: end.toISOString() }))}&sort={"closedAt":-1}`;
+    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&closedAt=${encodeURIComponent(
+      JSON.stringify({
+        start: start.toISOString(),
+        end: end.toISOString()
+      })
+    )}&sort={"closedAt":-1}`;
+
     const data = await fetchWithAuth(url);
     const rooms = data.rooms || [];
+
     closed += rooms.length;
+
     if (rooms.length === 0) break;
     offset += rooms.length;
   }
 
-  // ---- Em aberto (open=true) ----
+  // ---- Em aberto (filtra manualmente pelo ts) ----
   offset = 0;
   while (true) {
     const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&open=true&sort={"ts":-1}`;
     const data = await fetchWithAuth(url);
     const rooms = data.rooms || [];
-    open += rooms.length;
+
+    for (const room of rooms) {
+      const ts = new Date(room.ts);
+      if (ts >= start && ts <= end) {
+        open++;
+      }
+    }
+
     if (rooms.length === 0) break;
     offset += rooms.length;
   }
@@ -102,7 +106,9 @@ window.addEventListener("message", (event) => {
       userId: event.data.userId,
       siteUrl: event.data.siteUrl
     };
-    console.log("Dados recebidos do Meteor:", agentData); // depuração
+
+    console.log("Dados recebidos do Meteor:", agentData);
+
     btnVerConversas.disabled = false;
     btnIncrease.disabled = false;
   }
@@ -111,12 +117,19 @@ window.addEventListener("message", (event) => {
 // botão Ver Conversas
 btnVerConversas.addEventListener("click", async () => {
   if (!agentData || !agentData.agentName) return;
-  const selectedDate = inputData.value || new Date().toISOString().split("T")[0];
+
+  const selectedDate =
+    inputData.value || new Date().toISOString().split("T")[0];
+
   infoDiv.style.display = "block";
   infoDiv.textContent = "Carregando...";
+
   try {
     const user = await getUserByUsername(agentData.agentName);
-    const { closed, open, total } = await getChatsByDate(user._id, selectedDate);
+    const { closed, open, total } = await getChatsByDate(
+      user._id,
+      selectedDate
+    );
 
     const [year, month, day] = selectedDate.split("-");
     const dataFormatada = `${day}/${month}/${year}`;
