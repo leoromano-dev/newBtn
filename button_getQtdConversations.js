@@ -54,7 +54,7 @@ const [year, month, day] = targetDate.split("-");
 }
 
 const start = new Date(Date.UTC(year, month - 1, day, 3, 0, 0));
-const end = new Date(Date.UTC(year, month - 1, day + 1, 2, 59, 59, 999));
+const end = new Date(Date.UTC(year, month - 1, day, 2, 59, 59, 999));
 
   // ---- Finalizadas (usar closedAt) ----
   offset = 0;
