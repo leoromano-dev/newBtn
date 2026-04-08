@@ -10,7 +10,12 @@ let agentData = null;
 // Preenche input com data de hoje
 (function setHoje() {
   const hoje = new Date();
-  inputData.value = hoje.toISOString().split("T")[0];
+
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+  const dia = String(hoje.getDate()).padStart(2, "0");
+
+  inputData.value = `${ano}-${mes}-${dia}`;
 })();
 
 // função de fetch com autenticação dinâmica
