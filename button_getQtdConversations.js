@@ -77,10 +77,7 @@ async function getChatsByDate(agentId, targetDate) {
     const rooms = data.rooms || [];
 
     for (const room of rooms) {
-      const ts = new Date(room.ts);
-      if (ts >= start && ts <= end) {
-        open++;
-      }
+      open++;
     }
 
     if (rooms.length === 0) break;
