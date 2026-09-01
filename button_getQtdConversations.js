@@ -34,7 +34,7 @@ async function fetchWithAuth(url, options = {}) {
 // busca usuário pelo username
 async function getUserByUsername(username) {
   const data = await fetchWithAuth(
-    `${agentData.siteUrl}/users.info?username=${encodeURIComponent(username)}`
+    `${agentData.siteUrl}/api/v1/users.info?username=${encodeURIComponent(username)}`
   );
   if (!data.user) throw new Error("Usuário não encontrado");
   return data.user;
@@ -53,7 +53,7 @@ async function getChatsByDate(agentId, targetDate) {
   // ---- Finalizadas (closedAt dentro do range) ----
   offset = 0;
   while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&closedAt=${encodeURIComponent(
+    const url = `${agentData.siteUrl}/api/v1/livechat/rooms?agents[]=${agentId}&offset=${offset}&closedAt=${encodeURIComponent(
       JSON.stringify({
         start: start.toISOString(),
         end: end.toISOString()
@@ -72,7 +72,7 @@ async function getChatsByDate(agentId, targetDate) {
   // ---- Em aberto (filtra manualmente pelo ts) ----
   offset = 0;
   while (true) {
-    const url = `${agentData.siteUrl}/livechat/rooms?agents[]=${agentId}&offset=${offset}&open=true&sort={"ts":-1}`;
+    const url = `${agentData.siteUrl}/api/v1/livechat/rooms?agents[]=${agentId}&offset=${offset}&open=true&sort={"ts":-1}`;
     const data = await fetchWithAuth(url);
     const rooms = data.rooms || [];
 
